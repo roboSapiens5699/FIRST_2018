@@ -7,14 +7,16 @@
 // xbox
 package org.usfirst.frc.team5699.robot;
 
+import edu.wpi.first.wpilibj.ADXRS450_Gyro;
 import edu.wpi.first.wpilibj.CameraServer;
 import edu.wpi.first.wpilibj.Compressor;
 import edu.wpi.first.wpilibj.IterativeRobot;
 import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.Victor;
 import edu.wpi.first.wpilibj.Spark;
-import edu.wpi.first.wpilibj.DigitalInput;
+import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.DoubleSolenoid;
+import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 
@@ -28,14 +30,13 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 public class Robot extends IterativeRobot {
 	CameraServer server;
 	Joystick driver;
-	Victor leftDrive1, leftDrive2, rightDrive1, rightDrive2;
+	Victor leftDrive, rightDrive;
 	Spark intakeFlip;
 	Spark conveyor;
 	DoubleSolenoid solenoid;
 	Compressor comp;
+	private ADXRS450_Gyro gyro;
 	
-	DigitalInput microSwitchIn;
-	DigitalInput microSwitchConveyor;
 	boolean dropSafe = true;
 	boolean inSafe = true;
 	
@@ -47,6 +48,11 @@ public class Robot extends IterativeRobot {
 	
 	private static final String kDefaultAuto = "Default";
 	private static final String kCustomAuto = "My Auto";
+	private static final String kCentreRight = "Centre Right Auto";
+	private static final String kCentreLeft = "Centre Left Auto";
+	private static final String kLeft = "Left Auto";
+	private static final String kRight = "Right Auto";
+	
 	private String m_autoSelected;
 	private SendableChooser<String> m_chooser = new SendableChooser<>();
 
@@ -58,32 +64,35 @@ public class Robot extends IterativeRobot {
 	public void robotInit() {
 		m_chooser.addDefault("Default Auto", kDefaultAuto);
 		m_chooser.addObject("My Auto", kCustomAuto);
+		m_chooser.addObject("Centre Right Auto", kCentreRight);
+		m_chooser.addObject("Centre Left Auto", kCentreLeft);
+		m_chooser.addObject("Left Auto", kLeft);
+		m_chooser.addObject("Right Auto", kRight);
+		
 		SmartDashboard.putData("Auto choices", m_chooser);
-		
 		driver = new Joystick(0);
-		leftDrive1 = new Victor(0);
-		leftDrive2 = new Victor(1);
-		rightDrive1 = new Victor(2);
-		rightDrive2 = new Victor(3);
-		
-		conveyor = new Spark(5);
-		intakeFlip = new Spark(4);
+		leftDrive = new Victor(0);
+		rightDrive = new Victor(1);
+		autoCount = 0;
+		conveyor = new Spark(2);
+		intakeFlip = new Spark(3);
 		solenoid = new DoubleSolenoid(1,0);
 		comp = new Compressor(0);
-		
-		microSwitchConveyor = new DigitalInput(0);
-		microSwitchIn = new DigitalInput(1);
+		gyro = new ADXRS450_Gyro();
+		gyro.calibrate();
+	
+
 		
 		/********using 2 cameras at the same time*********/
 		server = CameraServer.getInstance();
 		//front camera
 		server.startAutomaticCapture(0);
 		server.getVideo();
-		server.putVideo("cam0", 320, 240);
+		server.putVideo("cam0", 160, 120);
 		//back camera
 		server.startAutomaticCapture(1);
 		server.getVideo();
-		server.putVideo("cam1", 320, 240);
+		server.putVideo("cam1", 160, 120);
 	}
 
 	/**
@@ -97,12 +106,18 @@ public class Robot extends IterativeRobot {
 	 * the switch structure below with additional strings. If using the
 	 * SendableChooser make sure to add them to the chooser code above as well.
 	 */
+	int autoCount;
 	@Override
 	public void autonomousInit() {
 		m_autoSelected = m_chooser.getSelected();
 		// autoSelected = SmartDashboard.getString("Auto Selector",
 		// defaultAuto);
 		System.out.println("Auto selected: " + m_autoSelected);
+		//this.gyro.calibrate();
+		autoCount = 0;
+		this.conveyor.set(0);
+		solenoid.set(DoubleSolenoid.Value.kReverse);
+
 	}
 
 	/**
@@ -114,9 +129,110 @@ public class Robot extends IterativeRobot {
 			case kCustomAuto:
 				// Put custom auto code here
 				break;
+			case kCentreRight:
+				if(autoCount == 0) {
+					Timer.delay(10);
+					this.setMotors(0.54, 0.5);
+					Timer.delay(2.5);
+					this.setMotors(0, 0);
+					autoCount++;
+					if(DriverStation.getInstance().getGameSpecificMessage().charAt(0) == 'R') {
+						this.solenoid.set(DoubleSolenoid.Value.kForward);
+						this.conveyor.set(0.75);
+						Timer.delay(3);
+						this.conveyor.set(0);
+					}
+				}
+				break;
+			case kCentreLeft:
+				if(autoCount == 0) {
+					
+					Timer.delay(10);
+					this.setMotors(0.54, 0.5);
+					Timer.delay(2.5);
+					this.setMotors(0, 0);
+					autoCount++;
+					if(DriverStation.getInstance().getGameSpecificMessage().charAt(0) == 'L') {
+						this.solenoid.set(DoubleSolenoid.Value.kForward);
+						this.conveyor.set(0.75);
+						Timer.delay(3);
+						this.conveyor.set(0);
+					}
+				}
+				break;
+			case kLeft:
+				if(autoCount == 0) {
+					
+					Timer.delay(5);
+					this.setMotors(0.54, 0.5);
+					Timer.delay(2.5);
+					this.setMotors(0, 0);
+					Timer.delay(0.5);
+					gyro.reset();
+					autoCount++;
+				}else if(autoCount == 1&&gyro.getAngle()>-90&&DriverStation.getInstance().getGameSpecificMessage().charAt(0) == 'L') {
+					this.setMotors(-0.3,0.3);
+					if(gyro.getAngle()<=-90) {
+						this.setMotors(0,0);
+						autoCount++;
+						Timer.delay(0.5);
+						gyro.reset();
+					}
+				}else if(autoCount == 2) {
+					this.setMotors(0.34, 0.3);
+					Timer.delay(2);
+					this.setMotors(0, 0);
+					autoCount++;
+				}else if(autoCount == 3) {
+					this.solenoid.set(DoubleSolenoid.Value.kForward);
+					this.conveyor.set(0.75);
+					Timer.delay(3);
+					this.conveyor.set(0);
+					autoCount++;
+				}
+				break;
+				
+			case kRight:
+				if(autoCount == 0) {
+					Timer.delay(5);
+					this.setMotors(0.54, 0.5);
+					Timer.delay(2.5);
+					this.setMotors(0, 0);
+					Timer.delay(0.5);
+					gyro.reset();
+					autoCount++;
+				}else if(autoCount == 1&&gyro.getAngle()<90&&DriverStation.getInstance().getGameSpecificMessage().charAt(0) == 'R') {
+					this.setMotors(0.3,-0.3);
+					if(gyro.getAngle()>=90) {
+						this.setMotors(0,0);
+						autoCount++;
+						Timer.delay(0.5);
+						gyro.reset();
+					}
+				}else if(autoCount == 2) {
+					this.setMotors(0.34, 0.3);
+					Timer.delay(2);
+					this.setMotors(0, 0);
+					autoCount++;
+				}else if(autoCount == 3) {
+					this.solenoid.set(DoubleSolenoid.Value.kForward);
+					this.conveyor.set(0.75);
+					Timer.delay(3);
+					this.conveyor.set(0);
+					autoCount++;
+				}
+			break;
 			case kDefaultAuto:
 			default:
 				// Put default auto code here
+				
+				if(autoCount == 0) {
+					Timer.delay(10);
+					this.setMotors(0.54, 0.5);
+					Timer.delay(2.5);
+					this.setMotors(0, 0);
+					autoCount++;
+				}
 				break;
 		}
 	}
@@ -135,13 +251,13 @@ public class Robot extends IterativeRobot {
 		if(Math.abs(joystick.getRawAxis(0)) < 0.2){
 	    	return 0;
 	    }
-	    else{
-	    	return joystick.getRawAxis(0) / 4;
+		else {
+	    	return (double)(joystick.getRawAxis(0)/2);
 	    }
 	}
 	void drive() {
-		double forewardPowerR = -getBFValue(driver) * direction + getTurnValue(driver);
-		double forewardPowerL = getBFValue(driver) * direction + getTurnValue(driver);
+		double forewardPowerR = getBFValue(driver) * direction + getTurnValue(driver);
+		double forewardPowerL = -getBFValue(driver) * direction + getTurnValue(driver);
 		
 		if(forewardPowerR>1){
 			forewardPowerR=1;
@@ -152,44 +268,54 @@ public class Robot extends IterativeRobot {
 		}else if(forewardPowerL<-1){
 			forewardPowerL=-1;
 		}
-		leftDrive1.set(forewardPowerL);
-		leftDrive2.set(forewardPowerL);
-		rightDrive1.set(forewardPowerR);
-		rightDrive2.set(forewardPowerR);
+		
+		leftDrive.set(forewardPowerL);
+		rightDrive.set(forewardPowerR);
+		
 	}
 	/**CONTROLS INTAKE**/
+	boolean inPressed,inPressed1,autoFlip;
+	boolean pistonDirection;
 	void intakeControl() {
 		//taking the box
-		if (driver.getRawButtonReleased(6)||this.intakeIn){
+		if(driver.getRawButton(6)&&!inPressed) {
+			pistonDirection = !pistonDirection;
+			inPressed = true;
+		}
+		if(driver.getRawButtonReleased(6)&&inPressed) {
+			inPressed = false;
+		}
+		if(pistonDirection) {
 			solenoid.set(DoubleSolenoid.Value.kForward);
-			this.intakeIn = true;
-		}
-		//dropping the box
-		if (driver.getRawButtonReleased(5)||!this.intakeIn){
+		}else {
 			solenoid.set(DoubleSolenoid.Value.kReverse);
-			this.intakeIn = false;
 		}
-		//rotates it on top of the conveyor
+		
+		//rotates it on top of the conveyer
 		boolean flipping = false;
-		if((this.driver.getRawAxis(5) > 0.2 || this.driver.getRawAxis(5) < -0.2) && dropSafe && inSafe) {
-			double power;
-			if(this.driver.getRawAxis(5) > 0.2)power = 0.3;
-			else power = -0.3;
+		if((this.driver.getRawAxis(5) > 0.2 || this.driver.getRawAxis(5) < -0.2) &&!autoFlip) {
+			double power = 0;
+			if(this.driver.getRawAxis(5) > -0.2) {
+				power = (this.driver.getRawAxis(5)/1.5);
+			}
+			if(this.driver.getRawAxis(5) < 0.2 ){
+				power = (this.driver.getRawAxis(5)/2); //down
+			}
 			this.intakeFlip.set(power);//check direction
 			flipping = true;
 		}
-		if(!flipping && !dropSafe && !inSafe) this.intakeFlip.set(0);
+		if(!flipping) this.intakeFlip.set(0); //just in case...
 		
 	}
 	/**CONTROLS CONVEYOR BELT**/
 	void conveyorControl() {
 		boolean rolling = false;
 		if(driver.getRawButton(4)){
-			conveyor.set(1);
+			conveyor.set(0.75);
 			rolling = true;
 		}
 		if(driver.getRawButton(1)){
-			conveyor.set(-1);
+			conveyor.set(-0.75);
 			rolling = true;
 		}
 		if(!rolling) {
@@ -200,34 +326,41 @@ public class Robot extends IterativeRobot {
 	/**
 	 * This function is called periodically during operator control.
 	 */
+	boolean demoOn = false;
 	@Override
 	public void teleopPeriodic() {
-		comp.setClosedLoopControl(true);
-		comp.setClosedLoopControl(false);
-		comp.start();
-		
-		drive();
-		intakeControl();
-		conveyorControl();
-		
-		//changes direction
-		if(driver.getRawButton(8) && !startPressed) {
-			direction *= -1;
-			startPressed = true;
+		//comp.setClosedLoopControl(true);
+		//comp.setClosedLoopControl(false);
+		//comp.start();
+		//System.out.println(comp.getCompressorCurrent());
+		if(!demoOn) {
+			drive();
+			intakeControl();
+			conveyorControl();
+			
+			//changes direction
+			if(driver.getRawButton(8) && !startPressed) {
+				direction *= -1;
+				startPressed = true;
+			}
+			if(driver.getRawButtonReleased(8)) {
+				startPressed = false;
+			}
+			//changes turning speed
+			if(driver.getRawButton(7) && !backPressed) {
+				slowMode = !slowMode;
+				backPressed = true;
+			}
+			if(driver.getRawButtonReleased(7)) {
+				backPressed = false;
+			}
+			if(driver.getRawButton(2)) {
+				demoOn = true;
+			}
+		}else {
+			demoAuto();
+			demoOn = false;
 		}
-		if(driver.getRawButtonReleased(8)) {
-			startPressed = false;
-		}
-		//changes turning speed
-		if(driver.getRawButton(7) && !backPressed) {
-			slowMode = !slowMode;
-			backPressed = true;
-		}
-		if(driver.getRawButtonReleased(7)) {
-			backPressed = false;
-		}
-		this.inSafe = this.microSwitchIn.get();
-		this.dropSafe = this.microSwitchIn.get();
 	}
 
 	
@@ -236,5 +369,30 @@ public class Robot extends IterativeRobot {
 	 */
 	@Override
 	public void testPeriodic() {
+	}
+		
+	/*** AUTONOMOUS METHODS ***/
+	private void setMotors(double right, double left) {
+		this.rightDrive.set(right*-1);
+		this.leftDrive.set(left);
+	}
+	
+	int randTime = (int)(Math.random() * 3) + 3;
+	public void demoAuto() {
+		Timer.delay(3);
+		this.solenoid.set(DoubleSolenoid.Value.kReverse);
+		Timer.delay(1);
+		this.intakeFlip.set(0.5);
+		Timer.delay(1.5);
+		this.setMotors(-1, 1);
+		Timer.delay(randTime);
+		this.setMotors(0, 0);
+		Timer.delay(0.5);
+		this.solenoid.set(DoubleSolenoid.Value.kForward);
+		this.conveyor.set(0.8);
+		Timer.delay(2);
+		this.setMotors(0, 0);
+		this.conveyor.set(0);
+		randTime = (int)(Math.random() * 3) + 3;
 	}
 }
